@@ -104,7 +104,12 @@ class ComplexType extends Type
 
             $comment = new PhpDocComment();
             $comment->setVar(PhpDocElementFactory::getVar($type, $name, ''));
-            $var = new PhpVariable('protected', $name, 'null', $comment);
+            if($typeHint === "array") {
+                $defaultValue = "array()";
+            } else {
+                $defaultValue = "null";
+            }
+            $var = new PhpVariable('protected', $name, $defaultValue, $comment);
             $this->class->addVariable($var);
 
             if (!$member->getNullable()) {
@@ -288,7 +293,11 @@ class ComplexType extends Type
                 $parameterString = $type . ' ' . $parameterString;
             }
             if ($defaultNull) {
-                $parameterString .= ' = null';
+                if($type === "array") {
+                    $parameterString .= ' = array()';
+                } else {
+                    $parameterString .= ' = null';
+                }
             }
             $parameterStrings[] = $parameterString;
         }

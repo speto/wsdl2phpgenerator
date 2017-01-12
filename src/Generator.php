@@ -107,7 +107,16 @@ class Generator implements GeneratorInterface
 
         $this->loadTypes();
         $this->loadService();
+//        $this->loadSoapClientOptions();
     }
+
+//    private function loadSoapClientOptions()
+//    {
+//        //classmap, typemap, soapClientOptionsFactory
+////        $serviceName = $this->wsdl->getService()->getName();
+////        $this->config['soapClientOptions']
+//        $this->serviceSoapOptions = new SoapClientOptions($this->config, $serviceName, , array $types);
+//    }
 
     /**
      * Loads the service class
@@ -151,7 +160,7 @@ class Generator implements GeneratorInterface
 
                 $type->setAbstract($typeNode->isAbstract());
 
-                foreach ($typeNode->getParts() as $name => $typeName) {
+                foreach ($typeNode->getElements() as $name => $typeName) {
                     // There are 2 ways a wsdl can indicate that a field accepts the null value -
                     // by setting the "nillable" attribute to "true" or by setting the "minOccurs" attribute to "0".
                     // See http://www.ibm.com/developerworks/webservices/library/ws-tip-null/index.html
@@ -159,7 +168,7 @@ class Generator implements GeneratorInterface
                     $type->addMember($typeName, $name, $nullable);
                 }
             } elseif ($enumValues = $typeNode->getEnumerations()) {
-                $type = new Enum($this->config, $typeNode->getName(), $typeNode->getRestriction());
+                $type = new Enum($this->config, $typeNode->getName(), $typeNode->getRestriction(), $typeNode->getNamespace());
                 array_walk($enumValues, function ($value) use ($type) {
                       $type->addValue($value);
                 });

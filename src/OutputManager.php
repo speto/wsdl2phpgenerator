@@ -53,8 +53,11 @@ class OutputManager
             $this->saveClassToFile($type);
         }
 
-        $classes = array_merge(array($service), $types);
-        $this->saveAutoloader($service->getIdentifier(), $classes);
+        $dumpAutoload = $this->config->get('dumpAutoload');
+        if($dumpAutoload) {
+            $classes = array_merge(array($service), $types);
+            $this->saveAutoloader($service->getIdentifier(), $classes);
+        }
     }
 
     /**

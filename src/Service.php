@@ -139,6 +139,8 @@ class Service implements ClassGenerator
      */
     public function generateClass()
     {
+        $soapClientClass = '\Webit\SoapApi\SoapApiExecutorInterface';
+        $soapFunctionName = 'executeSoapFunction';
         $name = $this->identifier;
 
         // Generate a valid classname
@@ -149,26 +151,13 @@ class Service implements ClassGenerator
 
         // Create the class object
         $comment = new PhpDocComment($this->description);
-        $this->class = new PhpClass($name, false, $this->config->get('soapClientClass'), $comment);
+        $this->class = new PhpClass($name, false, '', $comment);
 
         // Create the constructor
         $comment = new PhpDocComment();
-        $comment->addParam(PhpDocElementFactory::getParam('array', 'options', 'A array of config values'));
-        $comment->addParam(PhpDocElementFactory::getParam('string', 'wsdl', 'The wsdl file to use'));
-
-        $source = '
-  foreach (self::$classmap as $key => $value) {
-    if (!isset($options[\'classmap\'][$key])) {
-      $options[\'classmap\'][$key] = $value;
-    }
-  }' . PHP_EOL;
-        $source .= '  $options = array_merge(' . var_export($this->config->get('soapClientOptions'), true) . ', $options);' . PHP_EOL;
-        $source .= '  if (!$wsdl) {' . PHP_EOL;
-        $source .= '    $wsdl = \'' . $this->config->get('inputFile') . '\';' . PHP_EOL;
-        $source .= '  }' . PHP_EOL;
-        $source .= '  parent::__construct($wsdl, $options);' . PHP_EOL;
-
-        $function = new PhpFunction('public', '__construct', 'array $options = array(), $wsdl = null', $source, $comment);
+        $comment->addParam(PhpDocElementFactory::getParam($soapClientClass, 'soapClient', 'Valid soap client'));
+        $source = '    $this->soapClient = $soapClient;';
+        $function = new PhpFunction('public', '__construct', $soapClientClass . ' $soapClient', $source, $comment);
 
         // Add the constructor
         $this->class->addFunction($function);
@@ -179,14 +168,23 @@ class Service implements ClassGenerator
         $comment->setVar(PhpDocElementFactory::getVar('array', $name, 'The defined classes'));
 
         $init = array();
+        ksort($this->types);
         foreach ($this->types as $type) {
             if ($type instanceof ComplexType) {
                 $init[$type->getIdentifier()] = $this->config->get('namespaceName') . "\\" . $type->getPhpIdentifier();
             }
         }
-        $var = new PhpVariable('private static', $name, var_export($init, true), $comment);
+        $var = new PhpVariable('public static', $name, var_export($init, true), $comment);
 
         // Add the classmap variable
+        $this->class->addVariable($var);
+
+//        $this->addGetTypemapFunction();
+
+        $name = 'soapClient';
+        $comment = new PhpDocComment();
+        $comment->setVar(PhpDocElementFactory::getVar($soapClientClass, $name, 'SoapClient'));
+        $var = new PhpVariable('private', $name, '', $comment);
         $this->class->addVariable($var);
 
         // Add all methods
@@ -194,14 +192,25 @@ class Service implements ClassGenerator
             $name = Validator::validateOperation($operation->getName());
 
             $comment = new PhpDocComment($operation->getDescription());
-            $comment->setReturn(PhpDocElementFactory::getReturn($operation->getReturns(), ''));
+            if($operation->getReturns() !== "UNKNOWN") {
+                $return = $operation->getReturns();
+            } else {
+                $return = "null";
+            }
+            $comment->setReturn(PhpDocElementFactory::getReturn($return, ''));
 
             foreach ($operation->getParams() as $param => $hint) {
                 $arr = $operation->getPhpDocParams($param, $this->types);
                 $comment->addParam(PhpDocElementFactory::getParam($arr['type'], $arr['name'], $arr['desc']));
             }
 
-            $source = '  return $this->__soapCall(\'' . $operation->getName() . '\', array(' . $operation->getParamStringNoTypeHints() . '));' . PHP_EOL;
+//            $source = '  return $this->soapClient->__soapCall(\'' . $operation->getName() . '\', array(' . $operation->getParamStringNoTypeHints() . '));' . PHP_EOL;
+            if($operation->getReturns() !== "UNKNOWN") {
+                $resultType = $operation->getReturns() . "::class";
+            } else {
+                $resultType = "null";
+            }
+            $source = '  return $this->soapClient->' . $soapFunctionName . '(\'' . $operation->getName() . '\', ' . $operation->getParamStringNoTypeHints() . ', '. $resultType . ');' . PHP_EOL;
 
             $paramStr = $operation->getParamString($this->types);
 
@@ -221,5 +230,23 @@ class Service implements ClassGenerator
     public function addOperation(Operation $operation)
     {
         $this->operations[$operation->getName()] = $operation;
+    }
+
+    /**
+     * @return array
+     */
+    private function addGetTypemapFunction()
+    {
+        $name = 'getTypemap';
+        $init = array();
+        foreach ($this->types as $type) {
+            if ($type instanceof Enum) {
+                $init[] = $type->getIdentifier()."::getTypemap(),";
+            }
+        }
+        $typemap = implode("\n        ", $init);
+        $typemap = "    return array(\n        $typemap\n    );";
+        $var = new PhpFunction('public static', $name, "", $typemap, null);
+        $this->class->addFunction($var);
     }
 }

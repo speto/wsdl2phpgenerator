@@ -29,5 +29,10 @@
         "phpunit/phpunit": "~4.4",
         "psr/log": "~1.0",
         "symfony/yaml": "~2.1"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "3.x-dev"
+        }
     }
 }

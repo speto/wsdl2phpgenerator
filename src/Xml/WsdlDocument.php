@@ -32,6 +32,8 @@ class WsdlDocument extends SchemaDocument
      */
     protected $config;
 
+    private $namespace;
+
     public function __construct(ConfigInterface $config, $wsdlUrl)
     {
         $this->config = $config;
@@ -47,6 +49,7 @@ class WsdlDocument extends SchemaDocument
         } catch (SoapFault $e) {
             throw new Exception('Unable to load WSDL: ' . $e->getMessage(), $e->getCode(), $e);
         }
+        $this->initNamespace();
     }
 
     /**
@@ -58,16 +61,24 @@ class WsdlDocument extends SchemaDocument
     {
         $types = array();
 
-        $typeStrings = $this->soapClient->__getTypes();
-        foreach ($typeStrings as $typeString) {
-            $type = new TypeNode($typeString);
-            $element = $this->findTypeElement($type->getName());
-            if (!empty($element)) {
-                $type->setElement($this->document, $element);
-            }
-
+        /** @var \DOMElement[] $documentTypes */
+        $documentTypes = $this->xpath('//s:simpleType[@name]|//s:complexType[@name]');
+        foreach($documentTypes as $documentType) {
+            $name = $documentType->getAttribute("name");
+            $type = new TypeNode($this->document, $documentType, $name, $this->namespace);
             $types[] = $type;
         }
+
+        /** @var \DOMElement[] $documentTypes */
+        $documentTypes = $this->xpath('//s:complexType[not(@name)]');
+        foreach($documentTypes as $documentType) {
+            $typeName = $documentType->parentNode->parentNode->parentNode->getAttribute("name");
+            $elementName = $documentType->parentNode->getAttribute("name");
+            $name = $typeName . ucfirst($elementName);
+            $type = new TypeNode($this->document, $documentType, $name, $this->namespace, true);
+            $types[] = $type;
+        }
+
 
         return $types;
     }
@@ -103,5 +114,14 @@ class WsdlDocument extends SchemaDocument
             }
         }
         return $functions;
+    }
+
+    private function initNamespace()
+    {
+        $childs = $this->xpath('//wsdl:definitions');
+        /** @var \DOMElement $child */
+        $child = $childs->item(0);
+        $attribute = $child->getAttribute("targetNamespace");
+        $this->namespace = $attribute;
     }
 }

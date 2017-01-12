@@ -30,23 +30,39 @@ class TypeNode extends XmlNode
      */
     protected $restriction;
 
+    private $namespace;
+
+    /**
+     * @var bool
+     */
+    private $anonymous;
+
     /**
      * @param string $wsdlType The type as represented by the SOAP client.
      */
-    public function __construct($wsdlType)
+    public function __construct($document, $element, $name, $namespace, $anonymous = false)
     {
-        $this->wsdlType = $wsdlType;
+        parent::__construct($document, $element);
+        $this->name = $name;
+        $this->restriction = $this->parseRestriction();
+        $this->namespace = $namespace;
+        $this->anonymous = $anonymous;
+    }
 
-        // The first line of the WSDL type contains the type name and restriction. Extract them.
-        $lines = $this->getWsdlLines();
-        $firstLineElements = explode(" ", $lines[0]);
-        $this->restriction = $firstLineElements[0];
-        $this->name = $firstLineElements[1];
-        if (substr($this->name, -2, 2) == '[]') {
-            $this->name = substr($this->name, 0, -2);
+    private function parseRestriction()
+    {
+        if($this->element) {
+            $childs = $this->xpath("s:restriction");
+            if($childs->length > 0) {
+                /** @var \DOMElement $child */
+                $child = $childs->item(0);
+                $attribute = $child->getAttribute("base");
+                $restriction = $this->cleanNamespace($attribute);
+                return $restriction;
+            }
         }
 
-        parent::__construct();
+        return "";
     }
 
     /**
@@ -113,9 +129,10 @@ class TypeNode extends XmlNode
     {
         $base = null;
 
-        $extensions = $this->element->getElementsByTagName('extension');
-        if ($extensions->length > 0) {
-            $base = $this->cleanNamespace($extensions->item(0)->getAttribute('base'));
+        if($this->cleanNamespace($this->element->firstChild->nodeName) === "complexContent") {
+            if($this->cleanNamespace($this->element->firstChild->firstChild->nodeName) === "extension") {
+                $base = $this->cleanNamespace($this->element->firstChild->firstChild->getAttribute('base'));
+            }
         }
 
         return $base;
@@ -128,25 +145,20 @@ class TypeNode extends XmlNode
      *
      * @return array An array of sub element names and types.
      */
-    public function getParts()
+    public function getElements()
     {
-        $wsdlLines = $this->getWsdlLines();
-
         $parts = array();
-
-        // If array is defied as inherited from array type it have only one line and looks like "Type ArrayOfType[]"
-        if (sizeof($wsdlLines) == 1 && substr($wsdlLines[0], -2, 2) == '[]') {
-            list($typeName, $name) = explode(" ", $wsdlLines[0]);
-            $name = substr($name, 0, -2);
-            $typeName .= '[]';
-
-            $parts[$name] = $typeName;
-        }
-
-        for ($i = 1; $i < sizeof($wsdlLines) - 1; $i++) {
-            $wsdlLines[$i] = trim($wsdlLines[$i]);
-            list($typeName, $name) = explode(" ", substr($wsdlLines[$i], 0, strlen($wsdlLines[$i]) - 1));
-
+        $elements = $this->xpath("s:sequence/s:element|s:complexContent/s:extension/s:sequence/s:element");
+        /** @var \DOMNodeList|\DOMElement[] $elements */
+        foreach($elements as $element) {
+            $name = $element->getAttribute("name");
+            if($element->getAttribute("type")) {
+                $typeName = $this->cleanNamespace($element->getAttribute("type"));
+            } else {
+                $main = $element->parentNode->parentNode->getAttribute("name");
+                $doc = $name;
+                $typeName = $main . ucfirst($doc);
+            }
             if ($this->isElementArray($name)) {
                 $typeName .= '[]';
             }
@@ -229,7 +241,7 @@ class TypeNode extends XmlNode
      */
     public function isArray()
     {
-        $parts = $this->getParts();
+        $parts = $this->getElements();
 
         // Array types are complex types with one element, their names begins with 'ArrayOf'.
         // So if not - that's not array. Only field must be array also.
@@ -250,14 +262,16 @@ class TypeNode extends XmlNode
             && $this->element->getAttribute('abstract') == 'true';
     }
 
-    /**
-     * Returns the lines of WSDL type.
-     *
-     * @return string[] The lines of the WSDL type.
-     */
-    protected function getWsdlLines()
+    public function getNamespace()
     {
-        $newline = (strpos($this->wsdlType, "\r\n") ? "\r\n" : "\n");
-        return explode($newline, $this->wsdlType);
+        return $this->namespace;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isAnonymous()
+    {
+        return $this->anonymous;
     }
 }

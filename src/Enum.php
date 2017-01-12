@@ -7,6 +7,8 @@ namespace Wsdl2PhpGenerator;
 
 use \InvalidArgumentException;
 use Wsdl2PhpGenerator\PhpSource\PhpClass;
+use Wsdl2PhpGenerator\PhpSource\PhpFunction;
+use Wsdl2PhpGenerator\PhpSource\PhpVariable;
 
 /**
  * Enum represents a simple type with enumerated values
@@ -22,6 +24,8 @@ class Enum extends Type
      */
     private $values;
 
+    private $namespace;
+
     /**
      * Construct the object
      *
@@ -29,10 +33,12 @@ class Enum extends Type
      * @param string $name The identifier for the class
      * @param string $restriction The restriction(datatype) of the values
      */
-    public function __construct(ConfigInterface $config, $name, $restriction)
+    public function __construct(ConfigInterface $config, $name, $restriction, $namespace)
     {
         parent::__construct($config, $name, $restriction);
         $this->values = array();
+        $this->namespace = $namespace;
+
     }
 
     /**
@@ -66,6 +72,12 @@ class Enum extends Type
             $this->class->addConstant($value, $name);
             $names[] = $name;
         }
+
+        $this->createConstructor();
+        $this->createPrivateValueVariable();
+        $this->createGetValueMethod();
+        $this->createToStringMethod();
+//        $this->createGetTypemapMethod();
     }
 
     /**
@@ -114,5 +126,47 @@ class Enum extends Type
         $ret = substr($ret, 0, -2);
 
         return $ret;
+    }
+
+    private function createConstructor()
+    {
+        $source = '    $this->value = $value;';
+        $function = new PhpFunction('public', '__construct', '$value = self::__default', $source, null);
+        $this->class->addFunction($function);
+    }
+
+    private function createPrivateValueVariable()
+    {
+        $var = new PhpVariable('private', 'value', '', null);
+        $this->class->addVariable($var);
+    }
+
+    private function createGetValueMethod()
+    {
+        $source = '    return $this->value;';
+        $function = new PhpFunction('public', 'getValue', '', $source, null);
+        $this->class->addFunction($function);
+    }
+
+    private function createToStringMethod()
+    {
+        $source = '    return (string) $this->value;';
+        $function = new PhpFunction('public', '__toString', '', $source, null);
+        $this->class->addFunction($function);
+    }
+
+    private function createGetTypemapMethod()
+    {
+        $source = '    return [
+        "type_ns" => "' . $this->namespace . '",
+        "type_name" => "' . $this->identifier . '",
+        "from_xml" => function ($xml) {
+            $value = simplexml_load_string($xml);
+            $value = (' . $this->datatype . ') $value;
+            return new ' . $this->identifier . '($value);
+        },
+    ];';
+        $function = new PhpFunction('public static', 'getTypemap', '', $source, null);
+        $this->class->addFunction($function);
     }
 }

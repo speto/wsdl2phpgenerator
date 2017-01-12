@@ -189,7 +189,10 @@ class Validator
     public static function validateType($typeName)
     {
         if (substr($typeName, -2) == "[]") {
-            return $typeName;
+            $typeName = substr($typeName, 0, -2);
+            $arraySuffix = "[]";
+        } else {
+            $arraySuffix = "";
         }
 
         switch (strtolower($typeName)) {
@@ -206,33 +209,33 @@ class Validator
             case "unsignedint":
             case "unsignedlong":
             case "unsignedshort":
-                return 'int';
+                $typeName = 'int';
                 break;
             case "float":
             case "double":
             case "decimal":
-                return 'float';
+                $typeName = 'float';
                 break;
             case "<anyxml>":
             case "string":
             case "token":
             case "normalizedstring":
             case "hexbinary":
-                return 'string';
+            case "base64binary":
+                $typeName = 'string';
                 break;
             case "datetime":
-                return  '\DateTime';
+                $typeName =  '\DateTime';
                 break;
             default:
                 $typeName = self::validateNamingConvention($typeName);
+                if (self::isKeyword($typeName)) {
+                    $typeName .= self::NAME_SUFFIX;
+                }
                 break;
         }
 
-        if (self::isKeyword($typeName)) {
-            $typeName .= self::NAME_SUFFIX;
-        }
-
-        return $typeName;
+        return $typeName . $arraySuffix;
     }
 
     /**
@@ -251,6 +254,9 @@ class Validator
         if (substr($typeName, -2) == "[]") {
             $typeHint = 'array';
         } elseif ($typeName == '\DateTime') {
+            $typeHint = $typeName;
+        //bool?
+        } elseif (!in_array($typeName, ['int', 'float', 'string', 'bool', 'boolean'])) {
             $typeHint = $typeName;
         }
 
