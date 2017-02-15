@@ -214,7 +214,7 @@ class Validator
             case "float":
             case "double":
             case "decimal":
-                $typeName = 'float';
+                $typeName = '\Litipk\BigNumbers\Decimal';
                 break;
             case "<anyxml>":
             case "string":
